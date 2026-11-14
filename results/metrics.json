@@ -1,0 +1,45 @@
+{
+  "data": "SIMULATED electricity demand (MW)",
+  "test_windows": 252,
+  "one_step": {
+    "trained_lstm": {
+      "MAE": 15.182720709913642,
+      "RMSE": 19.784756220703883
+    },
+    "untrained_lstm": {
+      "MAE": 87.76592086559288,
+      "RMSE": 112.85967049169476
+    },
+    "persistence": {
+      "MAE": 25.693032782124156,
+      "RMSE": 32.87012354892866
+    },
+    "seasonal_naive_24h": {
+      "MAE": 39.480127027916744,
+      "RMSE": 48.4762802292253
+    }
+  },
+  "recursive_24h": {
+    "trained_lstm": {
+      "MAE": 25.129754788095664,
+      "RMSE": 32.58814527724617
+    },
+    "untrained_lstm": {
+      "MAE": 84.1511651949774,
+      "RMSE": 110.52216776301357
+    }
+  },
+  "gate_reconstruction_check": {
+    "max_abs_err_h": 9.76359583182429e-08,
+    "max_abs_err_c": 4.6332077197064336e-07,
+    "abs_err_prediction": 0.0,
+    "tolerance": 1e-05,
+    "passed": true
+  },
+  "final_train_loss_mse_normalized": 0.026243860108984843,
+  "final_val_loss_mse_normalized": 0.03953266516327858,
+  "epochs": 20,
+  "training_compute_seconds": 1.4593438998563215,
+  "hidden_units": 32,
+  "device": "cpu"
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+/*__CSS__*/
+.wrap{padding:10px 18px 10px 6px}
+svg{width:100%;height:auto;display:block}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.st{padding:10px 14px}
+.st .k{font-family:Orbitron;font-size:10.5px;letter-spacing:.14em;color:var(--muted)}
+.st .v{font-family:Orbitron;font-size:24px;margin-top:4px}
+</style></head><body><div class="wrap">
+<div class="row" style="justify-content:space-between;margin-bottom:8px">
+  <div class="row">
+    <button class="btn active" id="play">▶ PLAY</button><button class="btn" id="step">STEP ▶</button><button class="btn" id="reset">⟲ RESET</button>
+    <span style="width:10px"></span>
+    <button class="btn warm" id="mrec">RECURSIVE 24 h</button><button class="btn warm" id="mone">ONE-STEP</button>
+  </div>
+  <div class="row"><span class="tag measured">REAL MODEL OUTPUTS · HELD-OUT TEST DATA</span>
+    <span class="orb" id="hr" style="font-size:16px;color:var(--orange)">+0 h</span></div>
+</div>
+<div class="panel" style="padding:6px"><svg id="s" viewBox="0 0 1000 360"></svg></div>
+<div class="stats">
+  <div class="panel st"><div class="k">TRAINED LSTM · MAE SO FAR</div><div class="v" id="mt" style="color:var(--cyan)">—</div></div>
+  <div class="panel st"><div class="k">UNTRAINED LSTM · MAE SO FAR</div><div class="v" id="mu" style="color:#a0a8c0">—</div></div>
+  <div class="panel st"><div class="k">MODE</div><div class="v" id="mm" style="font-size:14px;line-height:1.5;color:#e6f1ff"></div></div>
+</div></div>
+<script>
+const D = __DATA__, $ = id => document.getElementById(id);
+const Hh = D.history_mw, A = D.actual_mw, n = A.length, m = Hh.length;
+let mode = 'rec', k = 0, playing = D.autoplay, last = 0;
+const all = Hh.concat(A, D.rec_trained, D.rec_untrained, D.one_trained, D.one_untrained);
+const lo = Math.min(...all) - 15, hi = Math.max(...all) + 15;
+const L = 60, R = 20, Tp = 20, B = 40, W = 1000, HH = 360;
+const X = i => L + (W - L - R) * i / (m + n - 1), Y = v => Tp + (HH - Tp - B) * (1 - (v - lo) / (hi - lo));
+const pl = (arr, off, col, w, ex = '') => `<polyline points="${arr.map((v, i) => `${X(i + off)},${Y(v)}`).join(' ')}" fill="none" stroke="${col}" stroke-width="${w}" ${ex}/>`;
+function draw() {
+  const tr = mode === 'rec' ? D.rec_trained : D.one_trained, un = mode === 'rec' ? D.rec_untrained : D.one_untrained;
+  let s = `<defs><filter id="gl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="fut" x1="0" x2="1"><stop offset="0" stop-color="#ff9d3c" stop-opacity=".09"/><stop offset="1" stop-color="#ff9d3c" stop-opacity="0"/></linearGradient></defs>`;
+  s += `<rect x="${X(m - .5)}" y="${Tp}" width="${W - R - X(m - .5)}" height="${HH - Tp - B}" fill="url(#fut)"/>`;
+  for (let j = 0; j <= 4; j++) { const v = lo + (hi - lo) * j / 4; s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="#8aa0c8" font-family="JetBrains Mono">${v.toFixed(0)}</text>`; }
+  s += `<line x1="${X(m - .5)}" x2="${X(m - .5)}" y1="${Tp}" y2="${HH - B}" stroke="rgba(255,255,255,.5)" stroke-dasharray="4 6"/>
+        <text x="${X(m - .5)}" y="${HH - 14}" text-anchor="middle" font-family="Orbitron" font-size="11" fill="#fff">NOW</text>
+        <text x="${L}" y="${HH - 14}" font-family="Orbitron" font-size="10.5" fill="#8aa0c8">PAST 24 h (input)</text>
+        <text x="${W - R}" y="${HH - 14}" text-anchor="end" font-family="Orbitron" font-size="10.5" fill="#ff9d3c">NEXT 24 h</text>
+        <text x="${L - 50}" y="${Tp - 6}" font-size="10" fill="#8aa0c8">MW (simulated)</text>`;
+  s += pl(Hh, 0, '#38e8ff', 2.4, 'opacity=".7"');
+  s += pl([Hh[m - 1]].concat(A), m - 1, 'rgba(230,241,255,.75)', 2, 'stroke-dasharray="6 4"');
+  if (k > 0) {
+    s += pl([Hh[m - 1]].concat(un.slice(0, k)), m - 1, 'rgba(160,168,192,.8)', 2, 'stroke-dasharray="2 4"');
+    s += pl([Hh[m - 1]].concat(tr.slice(0, k)), m - 1, '#ff9d3c', 3, 'filter="url(#gl)"');
+    for (let i = 0; i < k; i++) s += `<line x1="${X(m + i)}" x2="${X(m + i)}" y1="${Y(A[i])}" y2="${Y(tr[i])}" stroke="rgba(255,157,60,.35)"/>`;
+    const hx = X(m + k - 1), hy = Y(tr[k - 1]);
+    s += `<circle cx="${hx}" cy="${hy}" r="7" fill="#ff9d3c" filter="url(#gl)"/><circle cx="${hx}" cy="${hy}" r="16" fill="none" stroke="#ff9d3c" opacity=".5"/>`;
+  }
+  s += `<g font-size="12"><text x="${L + 10}" y="${Tp + 16}" fill="#38e8ff">— history</text><text x="${L + 100}" y="${Tp + 16}" fill="#e6f1ff">- - actual future</text>
+        <text x="${L + 230}" y="${Tp + 16}" fill="#ff9d3c">— trained LSTM</text><text x="${L + 360}" y="${Tp + 16}" fill="#a0a8c0">· · untrained LSTM</text></g>`;
+  $('s').innerHTML = s;
+  const mae = arr => k ? (arr.slice(0, k).reduce((s, v, i) => s + Math.abs(v - A[i]), 0) / k).toFixed(1) + ' MW' : '—';
+  $('mt').textContent = mae(tr); $('mu').textContent = mae(un); $('hr').textContent = `+${k} h`;
+  $('mm').innerHTML = mode === 'rec' ? 'Recursive: each forecast is fed back as the next input. Errors can accumulate.' : 'One-step: every hour the model sees the true past 24 h.';
+  $('play').textContent = playing ? '❚❚ PAUSE' : '▶ PLAY'; $('play').classList.toggle('active', playing);
+  $('mrec').classList.toggle('active', mode === 'rec'); $('mone').classList.toggle('active', mode === 'one');
+}
+function loop(ts) { if (playing && ts - last > 380) { last = ts; if (k < n) k++; else playing = false; draw(); } requestAnimationFrame(loop); }
+$('play').onclick = () => { if (k >= n) k = 0; playing = !playing; draw(); };
+$('step').onclick = () => { playing = false; k = Math.min(n, k + 1); draw(); };
+$('reset').onclick = () => { playing = false; k = 0; draw(); };
+$('mrec').onclick = () => { mode = 'rec'; k = 0; draw(); };
+$('mone').onclick = () => { mode = 'one'; k = 0; draw(); };
+draw(); requestAnimationFrame(loop);
+</script></body></html>

@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#03050d; --navy:#0a1330; --cyan:#38e8ff; --blue:#5b8cff; --orange:#ff9d3c;
+  --violet:#a66bff; --gold:#ffd27a; --mint:#7dffcf; --text:#e6f1ff; --muted:#8aa0c8;
+  --line:rgba(56,232,255,.22);
+  --f:#ff9d3c; --i:#38e8ff; --g:#a66bff; --o:#5b8cff; --c:#ffd27a; --h:#7dffcf;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:transparent;color:var(--text);
+  font-family:Inter,'Segoe UI',system-ui,sans-serif;overflow:hidden}
+.orb{font-family:Orbitron,'Segoe UI',sans-serif;letter-spacing:.12em}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+.panel{background:linear-gradient(160deg,rgba(18,30,66,.70),rgba(5,9,24,.82));
+  border:1px solid var(--line);border-radius:18px;
+  box-shadow:0 0 34px rgba(56,232,255,.07), inset 0 0 40px rgba(56,232,255,.035)}
+.btn{font-family:Orbitron,'Segoe UI',sans-serif;font-size:11px;letter-spacing:.14em;color:var(--cyan);
+  background:rgba(56,232,255,.07);border:1px solid rgba(56,232,255,.45);border-radius:999px;
+  padding:7px 14px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn:hover{background:rgba(56,232,255,.18);box-shadow:0 0 16px rgba(56,232,255,.35)}
+.btn.active{background:var(--cyan);color:#021018;box-shadow:0 0 18px rgba(56,232,255,.6)}
+.btn.warm{color:var(--orange);border-color:rgba(255,157,60,.5);background:rgba(255,157,60,.07)}
+.btn.warm.active{background:var(--orange);color:#1a0b00}
+.tag{display:inline-block;font-family:'JetBrains Mono',Consolas,monospace;font-size:10.5px;letter-spacing:.06em;
+  padding:3px 9px;border-radius:999px;border:1px solid}
+.tag.measured{color:var(--orange);border-color:rgba(255,157,60,.55);background:rgba(255,157,60,.08)}
+.tag.concept{color:var(--violet);border-color:rgba(166,107,255,.55);background:rgba(166,107,255,.08)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=range]{accent-color:var(--cyan)}
+sub{font-size:.7em}

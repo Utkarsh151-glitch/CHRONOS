@@ -1,0 +1,318 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+/*__CSS__*/
+.wrap{padding:10px 18px 10px 6px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.tstep{font-family:Orbitron;font-size:13px;color:var(--gold);letter-spacing:.15em}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:12px}
+#cell{width:100%;height:auto;display:block}
+.gate rect.body{fill:rgba(10,18,44,.85);stroke-width:2;transition:all .35s}
+.gate .fillr{transition:all .35s}
+.gate text{pointer-events:none}
+.gate{cursor:pointer;transition:opacity .35s}
+.dim{opacity:.28}
+.wire{fill:none;stroke:rgba(140,170,230,.35);stroke-width:2.2;transition:all .35s}
+.wire.hot{stroke-width:3.4}
+.node circle,.node ellipse{fill:#0a1230;stroke:rgba(200,220,255,.6);stroke-width:2;transition:all .35s}
+.node text{fill:#dfe9ff;font-size:17px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.lbl{fill:#9fb3dc;font-size:14px;font-family:'JetBrains Mono',monospace}
+.big{font-family:Orbitron;font-size:13px;letter-spacing:.12em}
+.info{padding:16px 16px 12px;min-height:100%}
+.info h3{margin:0 0 4px;font-family:Orbitron;font-size:16px;letter-spacing:.12em}
+.info .eq{font-family:'Cambria Math','Times New Roman',serif;font-size:19px;margin:10px 0 10px;padding:10px 12px;
+  border-radius:12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);line-height:1.5}
+.info p{margin:6px 0;font-size:13.5px;line-height:1.5;color:#c9d7f2}
+.meas{margin-top:10px;padding:10px;border-radius:12px;background:rgba(255,157,60,.06);border:1px solid rgba(255,157,60,.25)}
+.meas b{color:var(--orange)}
+.units{display:grid;grid-template-columns:28px 1fr;gap:4px 8px;align-items:center;margin-top:8px}
+.units .k{font-family:'JetBrains Mono';font-size:11px;color:#9fb3dc;text-align:right}
+.ustrip{display:grid;gap:1px;height:14px}
+.ustrip div{border-radius:2px}
+.ustrip.sel{outline:1px solid #fff;outline-offset:2px;border-radius:2px}
+#tl{width:100%;height:auto;display:block;cursor:pointer}
+.legend{font-size:11px;color:var(--muted);margin-top:6px}
+.phasebar{display:flex;gap:4px;margin-top:8px}
+.phasebar div{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);transition:all .3s}
+</style></head><body><div class="wrap">
+
+<div class="top">
+  <div class="row">
+    <button class="btn" id="prev">◀ STEP</button>
+    <button class="btn active" id="play">▶ PLAY</button>
+    <button class="btn" id="next">STEP ▶</button>
+    <span class="tstep" id="tlabel">HOUR 1 / 24</span>
+    <input type="range" id="tslider" min="0" max="23" value="0" style="width:180px">
+  </div>
+  <div class="row" id="gatebtns"></div>
+</div>
+
+<div class="panel" style="padding:6px 10px 2px;margin-bottom:10px">
+  <svg id="tl" viewBox="0 0 1000 120"></svg>
+</div>
+
+<div class="grid">
+  <div class="panel" style="padding:4px">
+    <svg id="cell" viewBox="0 0 1000 560">
+      <defs>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="bigglow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <linearGradient id="hwy" x1="0" x2="1"><stop offset="0" stop-color="#ffd27a" stop-opacity=".25"/>
+          <stop offset=".5" stop-color="#ffd27a" stop-opacity=".9"/><stop offset="1" stop-color="#ffd27a" stop-opacity=".35"/></linearGradient>
+        <radialGradient id="cellbg" cx=".5" cy=".45" r=".7"><stop offset="0" stop-color="#16244f" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#050916" stop-opacity=".2"/></radialGradient>
+      </defs>
+      <rect x="120" y="58" width="760" height="432" rx="30" fill="url(#cellbg)" stroke="rgba(56,232,255,.28)" stroke-width="1.5" stroke-dasharray="6 6"/>
+      <text x="138" y="84" class="big" fill="rgba(56,232,255,.65)">LSTM CELL · HOUR t</text>
+      <g id="wires"></g>
+      <g id="nodes"></g>
+      <g id="gates"></g>
+      <g id="particles"></g>
+      <g id="labels"></g>
+    </svg>
+  </div>
+  <div class="panel info" id="info"></div>
+</div>
+<div class="legend"><span class="tag concept">CONCEPTUAL</span> particle flow shows the order of computation ·
+  <span class="tag measured">MEASURED</span> colours, numbers &amp; unit strips are the real activations of the trained PyTorch model on this test sequence</div>
+</div>
+<script>
+const D = __DATA__;
+const NS = 'http://www.w3.org/2000/svg';
+const T = D.T, H = D.H;
+const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+const absmean = a => a.reduce((s, v) => s + Math.abs(v), 0) / a.length;
+const fmt = (v, d = 2) => (v >= 0 ? '' : '−') + Math.abs(v).toFixed(d);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, u) => a.map((x, k) => Math.round(x + (b[k] - x) * u));
+function seqColor(v) { v = clamp(v, 0, 1); const a = [8, 12, 34], b = [120, 70, 230], c = [56, 232, 255];
+  return 'rgb(' + (v < .5 ? lerp(a, b, v * 2) : lerp(b, c, (v - .5) * 2)) + ')'; }
+function divColor(v) { v = clamp(v, -1, 1); const z = [8, 12, 34];
+  return 'rgb(' + (v < 0 ? lerp(z, [255, 140, 40], -v) : lerp(z, [56, 232, 255], v)) + ')'; }
+const CMAX = Math.max(1e-6, ...D.c.flat().map(Math.abs));
+const HMAX = Math.max(1e-6, ...D.h.flat().map(Math.abs));
+const MC = Math.max(1e-6, ...D.c.map(r => Math.abs(mean(r)))), MH = Math.max(1e-6, ...D.h.map(r => Math.abs(mean(r))));
+
+// ---------- geometry ----------
+const P = {
+  hwy: 'M 20 110 L 980 110',
+  cprev: 'M 20 110 L 288 110', cmid: 'M 312 110 L 528 110', cnext: 'M 552 110 L 980 110',
+  hprev: 'M 20 450 L 180 450', xin: 'M 180 540 L 180 450', bus: 'M 180 450 L 700 450',
+  toF: 'M 300 450 L 300 383', toI: 'M 430 450 L 430 383', toG: 'M 560 450 L 560 383', toO: 'M 700 450 L 700 383',
+  fUp: 'M 300 337 L 300 122', iUp: 'M 430 337 L 430 250 L 548 250', gUp: 'M 560 337 L 560 262',
+  igUp: 'M 560 238 L 560 122', cTap: 'M 800 110 L 800 182', tanhDown: 'M 800 218 L 800 298',
+  oUp: 'M 700 337 L 700 310 L 788 310', hOut: 'M 800 322 L 800 450 L 980 450'
+};
+const paths = {};
+const wiresG = document.getElementById('wires');
+for (const [id, d] of Object.entries(P)) {
+  const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); p.setAttribute('class', 'wire');
+  if (id === 'hwy') { p.setAttribute('stroke', 'url(#hwy)'); p.style.stroke = 'url(#hwy)'; p.style.strokeWidth = 7; p.setAttribute('filter', 'url(#glow)'); }
+  wiresG.appendChild(p); paths[id] = p;
+}
+const GATES = {
+  f: { x: 300, sym: 'σ', name: 'FORGET', col: '#ff9d3c' },
+  i: { x: 430, sym: 'σ', name: 'INPUT', col: '#38e8ff' },
+  g: { x: 560, sym: 'tanh', name: 'CANDIDATE', col: '#a66bff' },
+  o: { x: 700, sym: 'σ', name: 'OUTPUT', col: '#5b8cff' },
+};
+const gatesG = document.getElementById('gates'), gateEls = {};
+for (const [k, G] of Object.entries(GATES)) {
+  const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'gate');
+  g.innerHTML = `<rect class="halo" x="${G.x - 50}" y="330" width="100" height="60" rx="16" fill="${G.col}" opacity="0" filter="url(#bigglow)"/>
+    <rect class="body" x="${G.x - 46}" y="337" width="92" height="46" rx="13" stroke="${G.col}"/>
+    <rect class="fillr" x="${G.x - 46}" y="337" width="92" height="46" rx="13" fill="${G.col}" opacity=".1"/>
+    <text x="${G.x}" y="361" fill="#fff" font-size="${G.sym === 'tanh' ? 17 : 24}" font-weight="700" text-anchor="middle" dominant-baseline="central">${G.sym}</text>
+    <text x="${G.x}" y="404" fill="${G.col}" font-size="11.5" text-anchor="middle" class="big">${G.name}</text>
+    <text class="val mono" x="${G.x}" y="324" fill="${G.col}" font-size="14" text-anchor="middle"></text>`;
+  g.addEventListener('click', () => selectPhase(k === 'g' ? 'candidate' : { f: 'forget', i: 'input', o: 'output' }[k]));
+  gatesG.appendChild(g); gateEls[k] = g;
+}
+const nodesG = document.getElementById('nodes'), nodeEls = {};
+function node(id, x, y, txt, ell) {
+  const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'node');
+  g.innerHTML = ell ? `<ellipse cx="${x}" cy="${y}" rx="34" ry="18"/><text x="${x}" y="${y}" style="font-size:14px">${txt}</text>`
+                    : `<circle cx="${x}" cy="${y}" r="13"/><text x="${x}" y="${y}">${txt}</text>`;
+  nodesG.appendChild(g); nodeEls[id] = g;
+}
+node('fx', 300, 110, '×'); node('plus', 560, 110, '+'); node('ix', 560, 250, '×');
+node('tanh', 800, 200, 'tanh', true); node('ox', 800, 310, '×');
+const labelsG = document.getElementById('labels');
+labelsG.innerHTML = `
+  <text class="lbl" x="22" y="96">c<tspan baseline-shift="sub" font-size="10">t−1</tspan></text>
+  <text class="lbl" x="930" y="96">c<tspan baseline-shift="sub" font-size="10">t</tspan></text>
+  <text class="lbl" x="22" y="438">h<tspan baseline-shift="sub" font-size="10">t−1</tspan></text>
+  <text class="lbl" x="930" y="438">h<tspan baseline-shift="sub" font-size="10">t</tspan></text>
+  <text class="lbl" x="192" y="530">x<tspan baseline-shift="sub" font-size="10">t</tspan></text>
+  <text class="big" x="400" y="40" fill="#ffd27a" font-size="12">CELL STATE · LONG-TERM MEMORY HIGHWAY</text>
+  <text class="big" x="330" y="530" fill="#7dffcf" font-size="12">[h<tspan baseline-shift="sub" font-size="9">t−1</tspan>, x<tspan baseline-shift="sub" font-size="9">t</tspan>] → ALL FOUR GATES</text>
+  <text id="xval" class="mono" x="192" y="512" fill="#38e8ff" font-size="13"></text>
+  <text id="cval" class="mono" x="842" y="138" fill="#ffd27a" font-size="13"></text>
+  <text id="hval" class="mono" x="842" y="472" fill="#7dffcf" font-size="13"></text>`;
+
+// ---------- phases ----------
+const PH = [
+  { key: 'arrive', gate: null, title: 'DATA ARRIVAL', col: '#38e8ff', paths: ['xin', 'hprev', 'bus'],
+    eq: 'input = [h<sub>t−1</sub>, x<sub>t</sub>]',
+    desc: 'The demand value for this hour, x<sub>t</sub>, is joined with the previous hidden state h<sub>t−1</sub>. Every gate reads this same combined vector, each with its own learned weights.' },
+  { key: 'forget', gate: 'f', title: 'FORGET GATE', col: '#ff9d3c', paths: ['toF', 'fUp', 'cprev'],
+    eq: 'f<sub>t</sub> = σ( W<sub>f</sub> [h<sub>t−1</sub>, x<sub>t</sub>] + b<sub>f</sub> )',
+    desc: 'Decides how much of the old memory c<sub>t−1</sub> to <b>keep</b>. Output is between 0 (erase) and 1 (keep everything), separately for every memory unit.' },
+  { key: 'input', gate: 'i', title: 'INPUT GATE', col: '#38e8ff', paths: ['toI', 'iUp'],
+    eq: 'i<sub>t</sub> = σ( W<sub>i</sub> [h<sub>t−1</sub>, x<sub>t</sub>] + b<sub>i</sub> )',
+    desc: 'Decides how much <b>new</b> information is allowed into memory. 0 = ignore this hour, 1 = write fully.' },
+  { key: 'candidate', gate: 'g', title: 'CANDIDATE STATE', col: '#a66bff', paths: ['toG', 'gUp'],
+    eq: 'g<sub>t</sub> = tanh( W<sub>g</sub> [h<sub>t−1</sub>, x<sub>t</sub>] + b<sub>g</sub> )',
+    desc: 'Proposes the new content that could be written, between −1 and +1. The input gate scales it: i<sub>t</sub> ⊙ g<sub>t</sub>.' },
+  { key: 'cell', gate: null, title: 'CELL STATE UPDATE', col: '#ffd27a', paths: ['igUp', 'cmid', 'cnext'],
+    eq: 'c<sub>t</sub> = f<sub>t</sub> ⊙ c<sub>t−1</sub> + i<sub>t</sub> ⊙ g<sub>t</sub>',
+    desc: 'The long-term memory is updated by <b>addition</b>, not repeated multiplication. Gradients can flow back along this highway, scaled only by the forget gate, which is why LSTMs suffer far less from vanishing gradients than plain RNNs (they reduce the problem, not remove it).' },
+  { key: 'output', gate: 'o', title: 'OUTPUT GATE', col: '#5b8cff', paths: ['toO', 'oUp', 'cTap', 'tanhDown'],
+    eq: 'o<sub>t</sub> = σ( W<sub>o</sub> [h<sub>t−1</sub>, x<sub>t</sub>] + b<sub>o</sub> )',
+    desc: 'Decides which parts of the memory are <b>revealed</b> this hour. The memory is squashed with tanh and filtered by o<sub>t</sub>.' },
+  { key: 'hidden', gate: null, title: 'HIDDEN STATE', col: '#7dffcf', paths: ['hOut'],
+    eq: 'h<sub>t</sub> = o<sub>t</sub> ⊙ tanh( c<sub>t</sub> )',
+    desc: 'h<sub>t</sub> is the short-term, exposed state. It goes to the next hour and, after hour 24, into the linear layer that predicts the next hour\'s demand. <b>c<sub>t</sub> = private long-term memory, h<sub>t</sub> = what the cell says out loud.</b>' },
+];
+const PIDX = Object.fromEntries(PH.map((p, k) => [p.key, k]));
+const btnRow = document.getElementById('gatebtns'), pbtn = {};
+for (const p of PH) {
+  const b = document.createElement('button'); b.className = 'btn'; b.textContent = p.title.replace(' STATE', '').replace(' GATE', '').replace(' UPDATE', '');
+  b.style.color = p.col; b.style.borderColor = p.col + '88';
+  b.onclick = () => selectPhase(p.key); btnRow.appendChild(b); pbtn[p.key] = b;
+}
+
+// ---------- particles ----------
+const layer = document.getElementById('particles'); const parts = [];
+function emit(id, color, n = 7, dur = 800, delay = 0, r = 3.4) {
+  const p = paths[id], L = p.getTotalLength(), now = performance.now();
+  for (let k = 0; k < n; k++) {
+    const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', r); c.setAttribute('fill', color);
+    c.setAttribute('filter', 'url(#glow)'); c.setAttribute('opacity', 0); layer.appendChild(c);
+    parts.push({ c, p, L, start: now + delay + k * dur * 0.09, dur });
+  }
+}
+function emitPhase(ph, dur) { ph.paths.forEach((id, k) => emit(id, ph.col, 7, dur * 0.55, k * dur * 0.3)); }
+let lastAmb = 0;
+function tick(now) {
+  if (now - lastAmb > 420) { lastAmb = now; emit('hwy', '#ffd27a', 1, 3800, 0, 2.2 + 2.5 * absmean(D.c[t]) / CMAX); }
+  for (let k = parts.length - 1; k >= 0; k--) {
+    const q = parts[k], u = (now - q.start) / q.dur;
+    if (u < 0) continue;
+    if (u >= 1) { q.c.remove(); parts.splice(k, 1); continue; }
+    const pt = q.p.getPointAtLength(u * q.L);
+    q.c.setAttribute('cx', pt.x); q.c.setAttribute('cy', pt.y); q.c.setAttribute('opacity', 0.25 + 0.75 * Math.sin(Math.PI * u));
+  }
+  if (playing && now - phaseStart > PHASE_MS) advance();
+  requestAnimationFrame(tick);
+}
+
+// ---------- timeline ----------
+const tl = document.getElementById('tl');
+const xmin = Math.min(...D.x_mw), xmax = Math.max(...D.x_mw);
+function drawTimeline() {
+  let s = `<text x="6" y="14" class="big" fill="#8aa0c8" font-size="10">INPUT SEQUENCE x<tspan font-size="8" baseline-shift="sub">t</tspan> · 24 HOURS (SIMULATED MW)</text>
+           <text x="6" y="98" class="mono" fill="#ffd27a" font-size="10">mean c</text><text x="6" y="113" class="mono" fill="#7dffcf" font-size="10">mean h</text>`;
+  const x0 = 70, w = (1000 - x0 - 10) / T;
+  for (let k = 0; k < T; k++) {
+    const hgt = 12 + 58 * (D.x_mw[k] - xmin) / (xmax - xmin + 1e-9), cx = x0 + k * w;
+    const on = k === t, past = k < t;
+    s += `<g data-k="${k}"><rect x="${cx + 2}" y="${84 - hgt}" width="${w - 4}" height="${hgt}" rx="3"
+           fill="${on ? '#38e8ff' : past ? 'rgba(56,232,255,.45)' : 'rgba(120,150,210,.22)'}" ${on ? 'filter="url(#glow)"' : ''}/>
+           <rect x="${cx + 2}" y="89" width="${w - 4}" height="11" rx="2" fill="${k <= t ? divColor(mean(D.c[k]) / MC) : 'rgba(255,255,255,.04)'}"/>
+           <rect x="${cx + 2}" y="104" width="${w - 4}" height="11" rx="2" fill="${k <= t ? divColor(mean(D.h[k]) / MH) : 'rgba(255,255,255,.04)'}"/>
+           ${on ? `<text x="${cx + w / 2}" y="${78 - hgt}" text-anchor="middle" fill="#38e8ff" font-size="10" class="mono">${D.x_mw[k].toFixed(0)}</text>` : ''}
+           <rect x="${cx}" y="0" width="${w}" height="120" fill="transparent"/></g>`;
+  }
+  tl.innerHTML = s;
+}
+tl.addEventListener('click', e => {
+  const r = tl.getBoundingClientRect(), vx = (e.clientX - r.left) / r.width * 1000;
+  const k = Math.floor((vx - 70) / ((1000 - 80) / T)); if (k >= 0 && k < T) { t = k; phase = 0; playing = false; render(true); }
+});
+
+// ---------- state ----------
+let t = clamp(D.t0, 0, T - 1), phase = 0, playing = D.autoplay, phaseStart = performance.now();
+const PHASE_MS = 1250;
+
+function strip(key, vals, sel) {
+  const kind = (key === 'f' || key === 'i' || key === 'o') ? 'seq' : 'div';
+  const sc = key === 'c' ? CMAX : key === 'h' ? HMAX : 1;
+  return `<div class="k">${key}</div><div class="ustrip ${sel ? 'sel' : ''}" style="grid-template-columns:repeat(${H},1fr)">` +
+    vals.map(v => `<div title="${v.toFixed(3)}" style="background:${kind === 'seq' ? seqColor(v) : divColor(v / sc)}"></div>`).join('') + '</div>';
+}
+function interp(ph) {
+  const k = ph.gate, x = D.x_mw[t];
+  if (ph.key === 'arrive') return `At hour <b>${t + 1}</b> the input is <b>${x.toFixed(1)} MW</b> (normalised ${fmt(D.x[t])}). h<sub>t−1</sub> carries what the cell concluded from hours 1–${t}.`;
+  if (k === 'f') { const m = mean(D.f[t]); const keep = D.f[t].filter(v => v > .9).length, era = D.f[t].filter(v => v < .1).length;
+    return `Average forget activation <b>${m.toFixed(2)}</b> → on average ~<b>${Math.round(m * 100)}%</b> of the previous memory is kept. <b>${keep}</b> of ${H} units keep &gt;90%, <b>${era}</b> erase almost everything.`; }
+  if (k === 'i') { const m = mean(D.i[t]); return `Average input activation <b>${m.toFixed(2)}</b> → new information is written at roughly <b>${Math.round(m * 100)}%</b> strength this hour. Most open unit: ${Math.max(...D.i[t]).toFixed(2)}.`; }
+  if (k === 'g') { const pos = D.g[t].filter(v => v > 0).length; return `Mean |g| = <b>${absmean(D.g[t]).toFixed(2)}</b>. ${pos} units propose increasing their memory, ${H - pos} propose decreasing it.`; }
+  if (ph.key === 'cell') { const prev = t > 0 ? absmean(D.c[t - 1]) : 0; return `Mean |c| moves from <b>${prev.toFixed(2)}</b> to <b>${absmean(D.c[t]).toFixed(2)}</b>. The bottom "mean c" row in the timeline shows this memory being carried from hour to hour.`; }
+  if (k === 'o') { const m = mean(D.o[t]); return `Average output activation <b>${m.toFixed(2)}</b> → about <b>${Math.round(m * 100)}%</b> of the squashed memory is exposed as h<sub>t</sub>.`; }
+  if (ph.key === 'hidden') return t === T - 1
+    ? `Final hour. h<sub>24</sub> → linear layer → prediction <b>${D.pred_mw.toFixed(1)} MW</b> for the next hour. Actual: <b>${D.actual_mw.toFixed(1)} MW</b> (error ${fmt(D.pred_mw - D.actual_mw, 1)} MW).`
+    : `Mean |h<sub>t</sub>| = <b>${absmean(D.h[t]).toFixed(2)}</b>. This vector becomes h<sub>t−1</sub> for hour ${t + 2}.`;
+  return '';
+}
+function render(fresh) {
+  const ph = PH[phase];
+  document.getElementById('tlabel').textContent = `HOUR ${t + 1} / ${T}`;
+  document.getElementById('tslider').value = t;
+  document.getElementById('play').textContent = playing ? '❚❚ PAUSE' : '▶ PLAY';
+  document.getElementById('play').classList.toggle('active', playing);
+  for (const [key, b] of Object.entries(pbtn)) { b.classList.toggle('active', key === ph.key); b.style.background = key === ph.key ? PH[PIDX[key]].col : ''; b.style.color = key === ph.key ? '#020814' : PH[PIDX[key]].col; }
+  // gates: brightness = measured mean activation
+  for (const [k, el] of Object.entries(gateEls)) {
+    const m = k === 'g' ? absmean(D[k][t]) : mean(D[k][t]);
+    el.querySelector('.fillr').setAttribute('opacity', 0.08 + 0.6 * m);
+    el.querySelector('.val').textContent = (k === 'g' ? '|g|=' : k + '=') + m.toFixed(2);
+    const focus = ph.gate === k || (ph.key === 'arrive');
+    el.classList.toggle('dim', !focus && ph.key !== 'cell' && ph.key !== 'hidden');
+    el.querySelector('.halo').setAttribute('opacity', ph.gate === k ? 0.55 : 0);
+  }
+  const focusNodes = { forget: ['fx'], input: ['ix'], candidate: ['ix'], cell: ['plus', 'fx', 'ix'], output: ['tanh', 'ox'], hidden: ['ox'] }[ph.key] || [];
+  for (const [id, el] of Object.entries(nodeEls)) {
+    const s = el.querySelector('circle,ellipse'); const on = focusNodes.includes(id);
+    s.style.stroke = on ? ph.col : ''; s.style.filter = on ? 'url(#glow)' : ''; s.style.strokeWidth = on ? 3 : '';
+  }
+  for (const [id, p] of Object.entries(paths)) {
+    if (id === 'hwy') { p.style.strokeWidth = 4 + 9 * absmean(D.c[t]) / CMAX; continue; }
+    const on = ph.paths.includes(id); p.classList.toggle('hot', on); p.style.stroke = on ? ph.col : '';
+  }
+  document.getElementById('xval').textContent = `${D.x_mw[t].toFixed(0)} MW`;
+  document.getElementById('cval').textContent = `|c̄|=${absmean(D.c[t]).toFixed(2)}`;
+  document.getElementById('hval').textContent = `|h̄|=${absmean(D.h[t]).toFixed(2)}`;
+  const key = ph.gate || (ph.key === 'cell' ? 'c' : ph.key === 'hidden' ? 'h' : null);
+  document.getElementById('info').innerHTML = `
+    <div class="row" style="justify-content:space-between"><h3 style="color:${ph.col}">${ph.title}</h3><span class="tag measured">HOUR ${t + 1}</span></div>
+    <div class="eq">${ph.eq}</div><p>${ph.desc}</p>
+    <div class="meas"><div style="font-size:11px;letter-spacing:.1em;color:var(--orange);margin-bottom:4px" class="orb">MEASURED · TRAINED MODEL</div>
+      <p style="margin:0">${interp(ph)}</p></div>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted)">All ${H} memory units at hour ${t + 1} (hover for value)</div>
+    <div class="units">${['f', 'i', 'g', 'o', 'c', 'h'].map(k => strip(k, D[k][t], k === key)).join('')}</div>
+    <div class="legend">f, i, o: <span style="color:#7846e6">■</span> 0 → <span style="color:#38e8ff">■</span> 1 &nbsp; g: −1…+1 · c, h scaled to this sequence's max: <span style="color:#ff8c28">■</span> negative · <span style="color:#38e8ff">■</span> positive</div>
+    <div class="phasebar">${PH.map((p, k) => `<div style="background:${k <= phase ? p.col : ''}"></div>`).join('')}</div>`;
+  drawTimeline();
+  if (fresh) { emitPhase(ph, PHASE_MS); phaseStart = performance.now(); }
+}
+function advance() {
+  phase++; if (phase >= PH.length) { phase = 0; t = (t + 1) % T; }
+  render(true);
+}
+function back() { phase--; if (phase < 0) { phase = PH.length - 1; t = (t - 1 + T) % T; } render(true); }
+let loopTimer = null;
+function selectPhase(key) {
+  playing = false; phase = PIDX[key]; render(true);
+  clearInterval(loopTimer); loopTimer = setInterval(() => { if (!playing) emitPhase(PH[phase], PHASE_MS); else clearInterval(loopTimer); }, 1600);
+}
+document.getElementById('play').onclick = () => { playing = !playing; clearInterval(loopTimer); phaseStart = performance.now(); render(false); };
+document.getElementById('next').onclick = () => { playing = false; advance(); };
+document.getElementById('prev').onclick = () => { playing = false; back(); };
+document.getElementById('tslider').oninput = e => { t = +e.target.value; phase = 0; playing = false; render(true); };
+if (D.focus) selectPhase(D.focus); else render(true);
+requestAnimationFrame(tick);
+</script></body></html>

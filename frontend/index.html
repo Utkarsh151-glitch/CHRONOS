@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHRONOS</title>
+<link rel="stylesheet" href="chronos.css">
+</head>
+<body>
+  <!-- CinematicBackground: procedural space, horizon, planet, corridor -->
+  <canvas id="cosmos"></canvas>
+
+  <!-- 16:9 stage that holds the chapter scenes -->
+  <div id="stage">
+    <section class="scene" id="s0"></section>
+    <section class="scene" id="s1"></section>
+    <section class="scene" id="s2"></section>
+    <section class="scene" id="s3"></section>
+    <div id="caption"></div>
+  </div>
+
+  <div id="grain"></div>
+  <div id="vignette"></div>
+
+  <!-- ChapterNavigation: minimal indicator + edge controls -->
+  <div id="indicator"><div class="mark">CHRONOS</div><div class="segs"></div><div class="name"></div></div>
+  <div id="edge">
+    <button class="ctl" id="nav-prev" title="Previous chapter (←)">‹</button>
+    <button class="ctl" id="nav-map" title="Chapters (Esc)">chapters</button>
+    <button class="ctl" id="nav-next" title="Next chapter (→)">›</button>
+  </div>
+  <div id="map"></div>
+  <div id="toast"></div>
+
+  <script src="core.js"></script>
+  <script src="cosmos.js"></script>
+  <script src="scene_arrival.js"></script>
+  <script src="scene_chamber.js"></script>
+  <script src="scene_learning.js"></script>
+  <script src="scene_future.js"></script>
+  <script src="director.js"></script>
+</body>
+</html>

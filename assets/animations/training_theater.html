@@ -1,0 +1,257 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+/*__CSS__*/
+.wrap{padding:10px 18px 10px 6px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.epoch{font-family:Orbitron;font-size:18px;letter-spacing:.1em;color:#fff;padding-right:14px}
+.epoch small{font-size:12px;color:var(--muted)}
+.narr{min-height:44px;padding:10px 16px;margin-bottom:10px;font-size:14.5px;line-height:1.5;display:flex;gap:12px;align-items:center}
+.narr .ph{font-family:Orbitron;font-size:12px;letter-spacing:.14em;padding:5px 10px;border-radius:8px;white-space:nowrap}
+svg{display:block;width:100%;height:auto}
+.charts{display:grid;grid-template-columns:1fr 1fr 230px;gap:10px;margin-top:10px}
+.ctitle{font-family:Orbitron;font-size:11px;letter-spacing:.14em;color:var(--muted);padding:10px 12px 0;display:flex;justify-content:space-between}
+.gbars{padding:10px 14px}
+.gb{display:grid;grid-template-columns:60px 1fr 40px;gap:6px;align-items:center;margin:9px 0;font-size:12px}
+.gb .bar{height:10px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden}
+.gb .bar div{height:100%;border-radius:5px;transition:width .6s}
+.prog{height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
+.prog div{height:100%;background:linear-gradient(90deg,var(--cyan),var(--violet),var(--orange));box-shadow:0 0 12px var(--cyan);transition:width .4s}
+</style></head><body><div class="wrap">
+<div class="top">
+  <div class="row">
+    <button class="btn active" id="play">▶ PLAY</button>
+    <button class="btn" id="step">STEP ▶</button>
+    <button class="btn" id="restart">⟲ REPLAY</button>
+    <span style="width:8px"></span>
+    <button class="btn" data-sp="1">1×</button><button class="btn" data-sp="2">2×</button><button class="btn" data-sp="4">4×</button>
+  </div>
+  <div class="row"><span class="tag measured">REPLAY OF THE REAL TRAINING RUN</span>
+    <span class="epoch" id="ep">EPOCH 0 <small>/ 0</small></span></div>
+</div>
+<input type="range" id="eslider" min="0" value="0" style="width:100%">
+<div class="prog"><div id="progbar" style="width:0%"></div></div>
+<div class="panel narr" id="narr"></div>
+
+<div class="panel" style="padding:4px 6px">
+<svg id="chain" viewBox="0 0 1000 300">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="bigglow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="static"></g><g id="dyn"></g>
+</svg>
+</div>
+
+<div class="charts">
+  <div class="panel"><div class="ctitle"><span>LOSS (MSE, NORMALISED) · LOG SCALE</span><span><span style="color:var(--cyan)">— train</span> <span style="color:var(--orange)">— val</span></span></div>
+    <svg id="loss" viewBox="0 0 480 210"></svg></div>
+  <div class="panel"><div class="ctitle"><span>VALIDATION PROBE · 72 HOURS</span><span id="pmae" class="mono" style="color:var(--orange)"></span></div>
+    <svg id="probe" viewBox="0 0 480 210"></svg></div>
+  <div class="panel gbars"><div class="ctitle" style="padding:0 0 4px">MEAN GATE ACTIVATION</div>
+    <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">measured on the probe window after each epoch</div>
+    <div id="gbars"></div></div>
+</div>
+</div>
+<script>
+const D = __DATA__;
+const NS = 'http://www.w3.org/2000/svg';
+const Hs = D.history, E = Hs.length - 1, N = D.probe_input_mw.length;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const x0 = 52, dx = (800 - x0) / (N - 1), cy = 120;
+const cx = k => x0 + k * dx;
+
+// ---- static chain ----
+(function () {
+  const imin = Math.min(...D.probe_input_mw), imax = Math.max(...D.probe_input_mw);
+  let s = `<text x="10" y="22" font-family="Orbitron" font-size="10.5" letter-spacing="2" fill="#8aa0c8">LSTM UNROLLED THROUGH TIME · SAME WEIGHTS AT EVERY HOUR</text>
+    <line x1="${x0 - 30}" y1="${cy - 16}" x2="${cx(N - 1) + 14}" y2="${cy - 16}" stroke="rgba(255,210,122,.35)" stroke-width="3"/>
+    <line x1="${x0 - 30}" y1="${cy + 16}" x2="${cx(N - 1) + 14}" y2="${cy + 16}" stroke="rgba(125,255,207,.25)" stroke-width="2"/>
+    <text x="${x0 - 46}" y="${cy - 12}" font-size="10" fill="#ffd27a" font-family="JetBrains Mono">c</text>
+    <text x="${x0 - 46}" y="${cy + 20}" font-size="10" fill="#7dffcf" font-family="JetBrains Mono">h</text>
+    <path d="M ${cx(N - 1) + 14} ${cy + 16} C 850 ${cy + 16}, 850 ${cy}, 880 ${cy}" stroke="rgba(125,255,207,.4)" fill="none" stroke-width="2"/>
+    <text x="10" y="292" font-family="JetBrains Mono" font-size="10" fill="#8aa0c8">x_t (MW) — first validation window</text>`;
+  for (let k = 0; k < N; k++) {
+    const h = 10 + 46 * (D.probe_input_mw[k] - imin) / (imax - imin + 1e-9);
+    s += `<rect x="${cx(k) - 8}" y="${270 - h}" width="16" height="${h}" rx="3" fill="rgba(56,232,255,.35)"/>
+          <line x1="${cx(k)}" y1="${270 - h - 4}" x2="${cx(k)}" y2="${cy + 14}" stroke="rgba(56,232,255,.12)" stroke-dasharray="2 4"/>`;
+  }
+  s += `<text x="900" y="${cy - 34}" text-anchor="middle" font-family="Orbitron" font-size="10" fill="#8aa0c8">PREDICTION</text>
+        <text x="900" y="${cy + 92}" text-anchor="middle" font-family="Orbitron" font-size="10" fill="#8aa0c8">ACTUAL</text>
+        <text x="900" y="282" text-anchor="middle" font-family="Orbitron" font-size="9" fill="#8aa0c8">${D.n_params.toLocaleString()} PARAMETERS θ</text>`;
+  document.getElementById('static').innerHTML = s;
+})();
+
+// ---- dynamic elements (created once, updated per frame) ----
+const dyn = document.getElementById('dyn');
+dyn.innerHTML = Array.from({ length: N }, (_, k) => `
+   <rect id="gb${k}" x="${cx(k) - 6}" y="${cy + 44}" width="12" height="0" rx="2" fill="#ff9d3c" opacity=".85"/>
+   <rect id="cell${k}" x="${cx(k) - 12}" y="${cy - 12}" width="24" height="24" rx="6" fill="#0b1433" stroke="rgba(56,232,255,.5)" stroke-width="1.5"/>
+   <circle id="in${k}" cx="${cx(k)}" cy="250" r="3.5" fill="#38e8ff" opacity="0" filter="url(#glow)"/>`).join('') + `
+   <circle id="pred" cx="900" cy="${cy}" r="18" fill="#0b1433" stroke="#38e8ff" stroke-width="2"/>
+   <text id="predt" x="900" y="${cy + 1}" text-anchor="middle" dominant-baseline="central" font-family="JetBrains Mono" font-size="10" fill="#fff"></text>
+   <circle id="act" cx="900" cy="${cy + 66}" r="18" fill="#0b1433" stroke="#e6f1ff" stroke-width="2"/>
+   <text id="actt" x="900" y="${cy + 67}" text-anchor="middle" dominant-baseline="central" font-family="JetBrains Mono" font-size="10" fill="#fff"></text>
+   <line id="errl" x1="900" y1="${cy + 18}" x2="900" y2="${cy + 48}" stroke="#ff9d3c" stroke-width="3" opacity="0"/>
+   <circle id="lossn" cx="960" cy="${cy + 33}" r="16" fill="#ff9d3c" opacity="0" filter="url(#bigglow)"/>
+   <text id="losst" x="960" y="${cy + 34}" text-anchor="middle" dominant-baseline="central" font-family="Orbitron" font-size="11" fill="#1a0b00" opacity="0">L</text>
+   <circle id="wave" cx="0" cy="${cy}" r="10" fill="#38e8ff" opacity="0" filter="url(#bigglow)"/>
+   <g id="params"></g>
+   <text id="gradlbl" x="${x0 - 30}" y="${cy + 100}" font-family="JetBrains Mono" font-size="10" fill="#ff9d3c" opacity="0"></text>`;
+const P = document.getElementById('params');
+let ps = '';
+for (let r = 0; r < 5; r++) for (let c = 0; c < 14; c++) ps += `<rect class="pr" x="${846 + c * 8.5}" y="${236 + r * 7}" width="6" height="5" rx="1" fill="#38e8ff" opacity=".18"/>`;
+P.innerHTML = ps;
+const prs = [...P.querySelectorAll('.pr')];
+const $ = id => document.getElementById(id);
+
+// ---- phases ----
+const PH = [
+  { key: 'arrive', col: '#38e8ff', ms: 900, label: 'DATA ARRIVAL' },
+  { key: 'forward', col: '#38e8ff', ms: 1300, label: 'FORWARD PASS' },
+  { key: 'error', col: '#ff9d3c', ms: 800, label: 'ERROR' },
+  { key: 'backward', col: '#ff9d3c', ms: 1400, label: 'BACKPROP THROUGH TIME' },
+  { key: 'update', col: '#a66bff', ms: 900, label: 'ADAM UPDATE' },
+];
+let epoch = 1, phase = 0, u0 = 0, playing = D.autoplay, speed = 2, phaseStart = performance.now(), shown = 0;
+
+function narration() {
+  const h = Hs[epoch], prev = Hs[epoch - 1], p = PH[phase].key;
+  const yhat = prev.probe_pred_mw[0], y = D.probe_actual_mw[0];
+  const txt = {
+    arrive: `24 hours of (simulated) demand enter the network one hour at a time. In this epoch the model sees all <b>${D.n_train.toLocaleString()}</b> training windows in <b>${D.n_batches}</b> mini-batches.`,
+    forward: `Forward pass: each hour updates the cell state c and hidden state h using the <b>same</b> shared weights. After hour 24, h goes through the linear layer to produce a forecast.`,
+    error: `Prediction for the probe hour: <b>${yhat.toFixed(1)} MW</b> vs actual <b>${y.toFixed(1)} MW</b>. Mean-squared error is computed. Average training loss this epoch: <b>${h.train_loss.toFixed(4)}</b>.`,
+    backward: `The error flows <b>backwards through time</b>. Orange bars = measured |∂L/∂x<sub>t</sub>| for this window: recent hours usually carry the strongest gradient, older hours still receive signal through the cell-state highway.`,
+    update: `Adam adjusts all <b>${D.n_params.toLocaleString()}</b> parameters (${D.n_batches} steps this epoch, mean gradient norm <b>${h.grad_norm.toFixed(3)}</b>). Validation loss is now <b>${h.val_loss.toFixed(4)}</b>.`,
+  }[p];
+  $('narr').innerHTML = `<span class="ph" style="background:${PH[phase].col}22;color:${PH[phase].col};border:1px solid ${PH[phase].col}66">${PH[phase].label}</span><span>${txt}</span>`;
+}
+
+function frame(u) {
+  const p = PH[phase].key, prev = Hs[epoch - 1];
+  const g = prev.input_grad, gmax = Math.max(...g) || 1;
+  for (let k = 0; k < N; k++) {
+    const cell = $('cell' + k), dot = $('in' + k), gb = $('gb' + k);
+    let fill = '#0b1433', stroke = 'rgba(56,232,255,.5)', glow = '';
+    if (p === 'arrive') {
+      const q = clamp(u * 2.2 - k / N * 1.2, 0, 1);
+      dot.setAttribute('cy', 250 - q * (250 - cy - 12)); dot.setAttribute('opacity', q > 0 && q < 1 ? 1 : 0);
+    } else dot.setAttribute('opacity', 0);
+    if (p === 'forward') {
+      const w = u * (N + 3); const near = Math.exp(-((w - k) ** 2) / 3);
+      if (k < w) { fill = `rgba(56,232,255,${0.15 + 0.6 * near})`; stroke = '#38e8ff'; }
+      if (near > .5) glow = 'url(#glow)';
+    }
+    if (p === 'error' || p === 'update') { fill = 'rgba(56,232,255,.18)'; stroke = '#38e8ff'; }
+    if (p === 'backward') {
+      const w = (N + 2) - u * (N + 4); const gi = g[k] / gmax;
+      if (k > w) { fill = `rgba(255,157,60,${0.1 + 0.8 * gi})`; stroke = '#ff9d3c'; gb.setAttribute('height', 40 * gi); }
+      else gb.setAttribute('height', 0);
+      if (Math.abs(w - k) < 1) glow = 'url(#glow)';
+    } else if (p !== 'update') gb.setAttribute('height', 0);
+    cell.setAttribute('fill', fill); cell.setAttribute('stroke', stroke); cell.setAttribute('filter', glow);
+  }
+  const wave = $('wave');
+  if (p === 'forward') { wave.setAttribute('cx', x0 + u * (900 - x0)); wave.setAttribute('cy', cy); wave.setAttribute('fill', '#38e8ff'); wave.setAttribute('opacity', .9); }
+  else if (p === 'backward') { wave.setAttribute('cx', 960 - u * (960 - x0)); wave.setAttribute('cy', cy); wave.setAttribute('fill', '#ff9d3c'); wave.setAttribute('opacity', .9); }
+  else wave.setAttribute('opacity', 0);
+  const showPred = p !== 'arrive' && !(p === 'forward' && u < .9);
+  $('predt').textContent = showPred ? prev.probe_pred_mw[0].toFixed(0) : '';
+  $('pred').setAttribute('filter', showPred ? 'url(#glow)' : '');
+  $('actt').textContent = D.probe_actual_mw[0].toFixed(0);
+  const errOn = p === 'error' || (p === 'backward' && u < .2);
+  $('errl').setAttribute('opacity', errOn ? 1 : 0);
+  const err = Math.abs(prev.probe_pred_mw[0] - D.probe_actual_mw[0]);
+  $('lossn').setAttribute('r', 8 + Math.min(22, err / 6));
+  $('lossn').setAttribute('opacity', errOn ? (0.6 + 0.4 * Math.sin(u * Math.PI * 4) ** 2) : 0);
+  $('losst').setAttribute('opacity', errOn ? 1 : 0);
+  $('gradlbl').setAttribute('opacity', p === 'backward' ? 1 : 0);
+  $('gradlbl').textContent = `MEASURED |∂L/∂x_t| · max ${gmax.toExponential(2)}`;
+  prs.forEach((r, k) => r.setAttribute('opacity', p === 'update' ? (0.2 + 0.8 * Math.abs(Math.sin(u * 14 + k * 1.7))) : .18));
+  P.setAttribute('filter', p === 'update' ? 'url(#glow)' : '');
+}
+
+// ---- charts ----
+const losses = Hs.map(h => [h.train_loss, h.val_loss]).flat().filter(v => v > 0);
+const lmin = Math.log10(Math.min(...losses)) - .1, lmax = Math.log10(Math.max(...losses)) + .1;
+function lossChart(upto) {
+  const W = 480, Hh = 210, L = 46, R = 14, Tp = 14, B = 30;
+  const X = e => L + (W - L - R) * e / Math.max(1, E), Y = v => Tp + (Hh - Tp - B) * (1 - (Math.log10(v) - lmin) / (lmax - lmin));
+  let s = '';
+  for (let d = Math.ceil(lmin); d <= Math.floor(lmax); d++) s += `<line x1="${L}" x2="${W - R}" y1="${Y(10 ** d)}" y2="${Y(10 ** d)}" stroke="rgba(255,255,255,.07)"/><text x="${L - 6}" y="${Y(10 ** d) + 3}" text-anchor="end" font-size="9" fill="#8aa0c8" font-family="JetBrains Mono">1e${d}</text>`;
+  for (let e = 0; e <= E; e += Math.max(1, Math.round(E / 5))) s += `<text x="${X(e)}" y="${Hh - 12}" text-anchor="middle" font-size="9" fill="#8aa0c8" font-family="JetBrains Mono">${e}</text>`;
+  s += `<text x="${W - R}" y="${Hh - 1}" text-anchor="end" font-size="9" fill="#8aa0c8">epoch</text>`;
+  for (const [key, col] of [['train_loss', '#38e8ff'], ['val_loss', '#ff9d3c']]) {
+    const pts = Hs.slice(0, upto + 1).map(h => `${X(h.epoch)},${Y(Math.max(h[key], 1e-6))}`).join(' ');
+    s += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.4" filter="url(#g2)"/>`;
+    const h = Hs[upto]; s += `<circle cx="${X(h.epoch)}" cy="${Y(Math.max(h[key], 1e-6))}" r="5" fill="${col}" filter="url(#g2)"/>`;
+  }
+  s += `<text x="${W - R}" y="${Tp + 10}" text-anchor="end" font-size="11" fill="#e6f1ff" font-family="JetBrains Mono">train ${Hs[upto].train_loss.toFixed(4)} · val ${Hs[upto].val_loss.toFixed(4)}</text>`;
+  $('loss').innerHTML = `<defs><filter id="g2"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` + s;
+}
+const pa = D.probe_actual_mw, allp = pa.concat(Hs[0].probe_pred_mw, ...Hs.map(h => h.probe_pred_mw));
+const pmin = Math.min(...allp) - 10, pmax = Math.max(...allp) + 10;
+function probeChart(upto) {
+  const W = 480, Hh = 210, L = 40, R = 10, Tp = 12, B = 22, n = pa.length;
+  const X = k => L + (W - L - R) * k / (n - 1), Y = v => Tp + (Hh - Tp - B) * (1 - (v - pmin) / (pmax - pmin));
+  const line = (arr, col, w, extra = '') => `<polyline points="${arr.map((v, k) => `${X(k)},${Y(v)}`).join(' ')}" fill="none" stroke="${col}" stroke-width="${w}" ${extra}/>`;
+  let s = '';
+  for (let k = 0; k <= 3; k++) { const v = pmin + (pmax - pmin) * k / 3; s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${L - 5}" y="${Y(v) + 3}" text-anchor="end" font-size="9" fill="#8aa0c8" font-family="JetBrains Mono">${v.toFixed(0)}</text>`; }
+  s += line(Hs[0].probe_pred_mw, 'rgba(160,170,200,.45)', 1.5, 'stroke-dasharray="3 3"');
+  s += line(pa, '#e6f1ff', 1.8, 'stroke-dasharray="5 3"');
+  s += line(Hs[upto].probe_pred_mw, '#38e8ff', 2.6, 'filter="url(#g3)"');
+  s += `<text x="${L + 4}" y="${Hh - 6}" font-size="9.5" fill="#8aa0c8"><tspan fill="#e6f1ff">- - actual</tspan>   <tspan fill="#38e8ff">— epoch ${upto} prediction</tspan>   <tspan fill="rgba(160,170,200,.8)">· · untrained</tspan>  (MW)</text>`;
+  $('probe').innerHTML = `<defs><filter id="g3"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` + s;
+  const mae = Hs[upto].probe_pred_mw.reduce((s, v, k) => s + Math.abs(v - pa[k]), 0) / n;
+  $('pmae').textContent = `MAE ${mae.toFixed(1)} MW`;
+}
+function gateBars(upto) {
+  const gm = Hs[upto].gate_means;
+  const rows = [['forget f', gm.f, '#ff9d3c', 1], ['input i', gm.i, '#38e8ff', 1], ['cand. g', gm.g, '#a66bff', 1], ['output o', gm.o, '#5b8cff', 1]];
+  $('gbars').innerHTML = rows.map(([n, v, c]) => `<div class="gb"><span style="color:${c}">${n}</span>
+    <div class="bar"><div style="width:${clamp(Math.abs(v), 0, 1) * 100}%;background:${c};box-shadow:0 0 10px ${c}"></div></div>
+    <span class="mono">${v.toFixed(2)}</span></div>`).join('') +
+    `<div style="font-size:10.5px;color:var(--muted);margin-top:10px">Shown after epoch ${upto}. g can be negative (bar shows |g|).</div>`;
+}
+function showEpoch(e) { shown = e; lossChart(e); probeChart(e); gateBars(e); }
+
+function ui() {
+  $('ep').innerHTML = `EPOCH ${epoch} <small>/ ${E}</small>`;
+  $('eslider').value = epoch;
+  $('progbar').style.width = `${100 * ((epoch - 1) + (phase + 1) / PH.length) / E}%`;
+  $('play').textContent = playing ? '❚❚ PAUSE' : '▶ PLAY'; $('play').classList.toggle('active', playing);
+  document.querySelectorAll('[data-sp]').forEach(b => b.classList.toggle('active', +b.dataset.sp === speed));
+  narration();
+}
+function nextPhase() {
+  if (PH[phase].key === 'update') showEpoch(epoch);
+  phase++;
+  if (phase >= PH.length) {
+    if (epoch >= E) { phase = PH.length - 1; playing = false; ui(); frame(1); return; }
+    phase = 0; epoch++;
+  }
+  phaseStart = performance.now(); u0 = 0; ui();
+}
+function loop(now) {
+  if (playing) {
+    const u = clamp(u0 + (now - phaseStart) * speed / PH[phase].ms, 0, 1);
+    frame(u);
+    if (u >= 1) nextPhase();
+  }
+  requestAnimationFrame(loop);
+}
+$('play').onclick = () => {
+  if (!playing && epoch >= E && PH[phase].key === 'update' && shown === E) { epoch = 1; phase = 0; showEpoch(0); }
+  playing = !playing; phaseStart = performance.now(); ui();
+};
+$('step').onclick = () => { playing = false; nextPhase(); frame(.6); ui(); };
+$('restart').onclick = () => { epoch = 1; phase = 0; showEpoch(0); playing = true; phaseStart = performance.now(); ui(); };
+document.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => { speed = +b.dataset.sp; ui(); });
+$('eslider').max = E; $('eslider').min = 1;
+$('eslider').oninput = ev => { epoch = +ev.target.value; phase = 0; playing = false; showEpoch(epoch - 1); frame(0); ui(); };
+if (D.start_at_end) { epoch = E; phase = PH.length - 1; showEpoch(E); frame(1); playing = false; }
+else showEpoch(0);
+ui(); requestAnimationFrame(loop);
+</script></body></html>

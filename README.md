@@ -3,11 +3,14 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Vercel](https://img.shields.io/badge/Deployed-Vercel-black.svg?logo=vercel&logoColor=white)](https://vercel.com/)
+[![Vercel](https://img.shields.io/badge/Live%20Demo-Vercel-black.svg?logo=vercel&logoColor=white)](https://chronos-sigma-ten.vercel.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Verification: Passed](https://img.shields.io/badge/Verification-Passed%20(1e--7)-brightgreen.svg)](#mathematical-verification)
 
 > *"Every sequence has a past. Every prediction has a memory."*
+
+🌐 **Live Deployment:** [https://chronos-sigma-ten.vercel.app/](https://chronos-sigma-ten.vercel.app/)
+🔗 **Model API Endpoint:** [https://chronos-sigma-ten.vercel.app/api/predict](https://chronos-sigma-ten.vercel.app/api/predict)
 
 **CHRONOS** is an interactive, cinematic journey through the internal mechanics of a **production PyTorch LSTM** forecasting hourly electricity demand. 
 

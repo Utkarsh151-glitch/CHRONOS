@@ -1,0 +1,17 @@
+# Ignore local training & Streamlit scripts from Vercel functions
+app.py
+app_classic.py
+train.py
+evaluate.py
+verify.py
+dataset.py
+model.py
+experience.py
+visualization.py
+requirements.txt
+CHRONOS_Visual_References/
+presentation/
+assets/
+models/
+results/
+.streamlit/

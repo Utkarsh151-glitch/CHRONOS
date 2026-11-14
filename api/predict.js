@@ -1,6 +1,6 @@
 // Vercel Serverless Function: CHRONOS LSTM Model Inference
 // Evaluates exact LSTM gate activations (i, f, g, o, c, h) and forecast head.
-const weightsData = require('./model_weights.json');
+const weightsData = require('./_model_weights.json');
 
 const H = weightsData.hidden_size; // 32
 const W_ih = weightsData.weights['lstm.weight_ih_l0']; // (128, 1)
